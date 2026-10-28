@@ -5,6 +5,12 @@ on:
     # 但仍可能延迟/丢弃，所以一天给 24 次机会，命中一次即可。
     - cron: "17 * * * *"
   workflow_dispatch:
+  # push 只用于唤醒 GitHub 重新索引 cron，本身不做 dispatch，
+  # 避免一次 push 把整天的额度都打出去。
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trigger.yml'
 
 permissions:
   contents: read
@@ -14,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: dispatch 私有仓库的 daily.yml
+        if: github.event_name != 'push'
         env:
           GH_PAT: ${{ secrets.TRIGGER_PAT }}
         run: |
@@ -33,3 +40,10 @@ jobs:
           cat /tmp/out.txt
           # 204 = 已接受；404 = PAT 权限不足或端点不存在
           [ "$code" = "204" ] || exit 1
+
+  reindex:
+    # push 时空跑，只为让 GitHub 重新扫描 workflow 目录、激活 cron 注册
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "cron reindex nudge $(date -u)"
